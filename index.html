@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PennyWise | Expense Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('dashboard') }}"><span class="logo">₹</span><span>PennyWise<small>PERSONAL FINANCE DASHBOARD</small></span></a>
+  <a class="export" href="{{ url_for('export_csv') }}">↓ Export CSV</a>
+</header>
+<main class="container">
+  <section class="welcome">
+    <div><p class="eyebrow">YOUR MONEY, MADE CLEAR</p><h1>Expense overview</h1><p class="muted">Track transactions, understand spending, and stay in control.</p></div>
+    <form class="month-picker" method="get"><label for="month">Report month</label><input id="month" type="month" name="month" value="{{ selected_month }}"><button>Apply</button></form>
+  </section>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+  {% endwith %}
+  <section class="stats">
+    <article class="stat income"><span>Total income</span><strong>₹{{ "%.2f"|format(income_total) }}</strong><small>Selected month</small></article>
+    <article class="stat expense"><span>Total expenses</span><strong>₹{{ "%.2f"|format(expense_total) }}</strong><small>Selected month</small></article>
+    <article class="stat savings"><span>Net savings</span><strong>₹{{ "%.2f"|format(savings) }}</strong><small>Income minus expenses</small></article>
+    <article class="stat category"><span>Highest-spending category</span><strong>{{ highest_category }}</strong><small>Across recorded expenses</small></article>
+  </section>
+  <section class="main-grid">
+    <article class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">NEW TRANSACTION</p><h2>Add income or expense</h2></div><span class="plus">＋</span></div>
+      <form action="{{ url_for('add_expense') }}" method="post" class="entry-form">
+        <label>Date<input type="date" name="expense_date" value="{{ today }}" required></label>
+        <label>Type and category<select name="category_id" required><option value="">Choose category</option>{% for c in categories %}<option value="{{ c.category_id }}">{{ c.category_type|title }} · {{ c.category_name }}</option>{% endfor %}</select></label>
+        <label>Amount (₹)<input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required></label>
+        <label>Payment method<select name="payment_method" required><option value="">Choose method</option><option>Cash</option><option>UPI</option><option>Debit card</option><option>Credit card</option><option>Bank transfer</option><option>Other</option></select></label>
+        <label class="full">Description<input type="text" name="description" maxlength="255" placeholder="e.g. Lunch with friends" required></label>
+        <button class="primary full" type="submit">＋ Save transaction</button>
+      </form>
+      <p class="privacy-note">Use fictional or voluntarily entered data for this learning project. Do not enter banking passwords.</p>
+    </article>
+    <article class="panel filters-panel">
+      <div class="panel-heading"><div><p class="eyebrow">FIND A RECORD</p><h2>Filter transactions</h2></div><span class="filter-icon">⌕</span></div>
+      <form method="get" class="entry-form">
+        <label>Month<input type="month" name="month" value="{{ selected_month }}"></label>
+        <label>Category<select name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.category_id }}" {% if selected_category|string == c.category_id|string %}selected{% endif %}>{{ c.category_type|title }} · {{ c.category_name }}</option>{% endfor %}</select></label>
+        <label>From date<input type="date" name="start_date" value="{{ start_date }}"></label>
+        <label>To date<input type="date" name="end_date" value="{{ end_date }}"></label>
+        <button class="primary full" type="submit">Apply filters</button><a class="reset full" href="{{ url_for('dashboard') }}">Clear filters</a>
+      </form>
+    </article>
+  </section>
+  <section class="panel transactions">
+    <div class="panel-heading"><div><p class="eyebrow">TRANSACTION HISTORY</p><h2>Your transactions <span class="count">{{ records|length }}</span></h2></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Payment</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
+    {% for r in records %}
+      <tr><td>{{ r.expense_date }}</td><td class="desc">{{ r.description }}</td><td><span class="pill {{ r.category_type }}">{{ r.category_name }}</span></td><td>{{ r.payment_method }}</td><td class="amount {{ r.category_type }}">{% if r.category_type == 'income' %}+{% else %}−{% endif %}₹{{ "%.2f"|format(r.amount|float) }}</td>
+      <td class="actions"><details><summary>Edit</summary><form class="edit-form" method="post" action="{{ url_for('edit_expense', expense_id=r.expense_id) }}">
+        <label>Date<input type="date" name="expense_date" value="{{ r.expense_date }}" required></label>
+        <label>Category<select name="category_id">{% for c in categories %}<option value="{{ c.category_id }}" {% if c.category_id == r.category_id %}selected{% endif %}>{{ c.category_type|title }} · {{ c.category_name }}</option>{% endfor %}</select></label>
+        <label>Amount<input type="number" min="0.01" step="0.01" name="amount" value="{{ r.amount }}" required></label>
+        <label>Description<input name="description" value="{{ r.description }}" required></label>
+        <label>Payment<select name="payment_method">{% for p in ['Cash','UPI','Debit card','Credit card','Bank transfer','Other'] %}<option {% if p == r.payment_method %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+        <button class="primary">Save changes</button></form></details>
+        <form method="post" action="{{ url_for('delete_expense', expense_id=r.expense_id) }}" onsubmit="return confirm('Delete this transaction?')"><button class="delete">Delete</button></form></td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No transactions match your filters. Add your first transaction above.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="charts-section"><div class="section-title"><div><p class="eyebrow">UNDERSTAND YOUR HABITS</p><h2>Spending analytics</h2></div><p class="muted">Charts update from your saved records.</p></div>
+    <div class="chart-grid">
+      {% if charts.category %}<article class="panel chart"><h3>Category breakdown</h3><img src="data:image/png;base64,{{ charts.category }}" alt="Pie chart showing expense distribution by category"></article>{% endif %}
+      {% if charts.monthly %}<article class="panel chart"><h3>Month-wise expenses</h3><img src="data:image/png;base64,{{ charts.monthly }}" alt="Bar chart showing monthly expenses"></article>{% endif %}
+      {% if charts.income_expense %}<article class="panel chart wide-chart"><h3>Income vs expenses</h3><img src="data:image/png;base64,{{ charts.income_expense }}" alt="Line chart comparing monthly income and expenses"></article>{% endif %}
+      {% if not charts %}<article class="panel chart empty-chart">Add a few transactions to generate your charts and reports.</article>{% endif %}
+    </div>
+  </section>
+  <footer>Built with Flask · MySQL-compatible database · Pandas · NumPy · Matplotlib <span>Educational project · Not financial advice</span></footer>
+</main>
+</body></html>
